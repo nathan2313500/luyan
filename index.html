@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>路衍经济统计分析系统管理后台</title>
+    <!-- Element UI CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <!-- Vue.js -->
+    <script src="https://unpkg.com/vue@2/dist/vue.js"></script>
+    <!-- Element UI JS -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <!-- ECharts -->
+    <script src="https://unpkg.com/echarts@5.5.1/dist/echarts.min.js"></script>
+    <!-- 自定义样式 -->
+    <link rel="stylesheet" href="./css/main.css">
+</head>
+<body>
+    <div id="app">
+        <el-container>
+            <!-- 顶部导航 -->
+            <el-header class="header">
+                <div class="header-left">
+                    <h2 @click="handleMenuSelect('dashboard')" style="cursor: pointer;">路衍经济统计分析系统管理后台</h2>
+                </div>
+                <div class="header-right">
+                    <el-dropdown>
+                        <span class="el-dropdown-link">
+                            管理员<i class="el-icon-arrow-down el-icon--right"></i>
+                        </span>
+                        <el-dropdown-menu slot="dropdown">
+                            <el-dropdown-item>个人中心</el-dropdown-item>
+                            <el-dropdown-item>退出登录</el-dropdown-item>
+                        </el-dropdown-menu>
+                    </el-dropdown>
+                </div>
+            </el-header>
+            
+            <el-container>
+                <!-- 侧边栏 -->
+                <el-aside width="250px" class="sidebar">
+                    <el-menu
+                        :default-active="activeMenu"
+                        class="el-menu-vertical"
+                        @select="handleMenuSelect"
+                        background-color="#304156"
+                        text-color="#bfcbd9"
+                        active-text-color="#409EFF">
+                        
+                        <!-- 数据管理 -->
+                        <el-submenu index="data">
+                            <template slot="title">
+                                <i class="el-icon-data-line"></i>
+                                <span>数据管理</span>
+                            </template>
+                            <el-menu-item index="revenue">营收数据</el-menu-item>
+                            <el-menu-item index="flow">车流/客流数据</el-menu-item>
+                        </el-submenu>
+                        
+                        <!-- 基础信息管理 -->
+                        <el-submenu index="management">
+                            <template slot="title">
+                                <i class="el-icon-setting"></i>
+                                <span>基础信息管理</span>
+                            </template>
+                            <el-menu-item index="industry">产业类型管理</el-menu-item>
+                            <el-menu-item index="format">业态管理</el-menu-item>
+                            <el-menu-item index="unit">运营单位管理</el-menu-item>
+                        </el-submenu>
+                        
+                        <!-- 系统管理 -->
+                        <el-submenu index="system">
+                            <template slot="title">
+                                <i class="el-icon-user"></i>
+                                <span>系统管理</span>
+                            </template>
+                            <el-menu-item index="users">用户管理</el-menu-item>
+                            <el-menu-item index="roles">角色管理</el-menu-item>
+                            <el-menu-item index="logs">系统日志</el-menu-item>
+                        </el-submenu>
+                    </el-menu>
+                </el-aside>
+                
+                <!-- 主内容区 -->
+                <el-main class="main-content">
+                    <!-- 营收数据页面 -->
+                    <div v-if="activeMenu === 'revenue'" class="page-container">
+                        <div class="page-header">
+                            <h3>营收数据</h3>
+                        </div>
+                        
+                        <!-- 数据维度标签页 -->
+                        <el-tabs v-model="revenueActiveDimension" @tab-click="handleDimensionChange">
+                            <el-tab-pane label="日" name="day"></el-tab-pane>
+                            <el-tab-pane label="月" name="month"></el-tab-pane>
+                            <el-tab-pane label="年" name="year"></el-tab-pane>
+                        </el-tabs>
+                        
+                        <!-- 筛选区 -->
+                        <el-card class="filter-card">
+                            <div slot="header">
+                                <span>筛选条件</span>
+                            </div>
+                            <el-form :inline="true" :model="revenueFilter" class="filter-form">
+                                <el-form-item label="产业类型/运营单位/业态">
+                                    <el-cascader
+                                        v-model="revenueFilter.cascaderValue"
+                                        :options="cascaderOptions"
+                                        :props="cascaderProps"
+                                        style="width: 400px"
+                                        clearable
+                                        filterable>
+                                    </el-cascader>
+                                </el-form-item>
+                                
+                                <el-form-item label="快速筛选" v-if="revenueActiveDimension === 'day'">
+                                    <el-select v-model="revenueFilter.quickDateFilter" placeholder="选择时间范围" clearable style="width: 120px;" @change="handleQuickDateFilter">
+                                        <el-option
+                                            v-for="item in quickDateOptions"
+                                            :key="item.value"
+                                            :label="item.label"
+                                            :value="item.value">
+                                        </el-option>
+                                    </el-select>
+                                </el-form-item>
+                                
+                                <el-form-item label="日期范围" v-if="revenueActiveDimension !== 'year'">
+                                    <el-date-picker
+                                    v-model="revenueFilter.dateRange"
+                                    :type="getDatePickerType(revenueActiveDimension)"
+                                    range-separator="至"
+                                    :start-placeholder="getDatePlaceholder('start', revenueActiveDimension)"
+                                    :end-placeholder="getDatePlaceholder('end', revenueActiveDimension)"
+                                    :format="getDateFormat(revenueActiveDimension)"
+                                    :value-format="getDateFormat(revenueActiveDimension)"
+                                    style="width: 300px">
+                                </el-date-picker>
+                                </el-form-item>
+                                
+                                <el-form-item label="年份范围" v-if="revenueActiveDimension === 'year'">
+                                    <el-date-picker
+                                    v-model="revenueFilter.startYear"
+                                    type="year"
+                                    placeholder="开始年份"
+                                    format="yyyy"
+                                    value-format="yyyy"
+                                    style="width: 140px">
+                                    </el-date-picker>
+                                    <span style="margin: 0 10px;">至</span>
+                                    <el-date-picker
+                                    v-model="revenueFilter.endYear"
+                                    type="year"
+                                    placeholder="结束年份"
+                                    format="yyyy"
+                                    value-format="yyyy"
+                                    style="width: 140px">
+                                    </el-date-picker>
+                                </el-form-item>
+                                
+                                <el-form-item label="营收范围(万元)">
+                                    <el-input-number v-model="revenueFilter.revenueRange[0]" :min="0" :step="1" placeholder="最小值" style="width: 100px;"></el-input-number>
+                                    <span style="margin: 0 8px;">至</span>
+                                    <el-input-number v-model="revenueFilter.revenueRange[1]" :min="0" :step="1" placeholder="最大值" style="width: 100px;"></el-input-number>
+                                </el-form-item>
+                                
+                                <el-form-item label="利润范围(万元)">
+                                    <el-input-number v-model="revenueFilter.profitRange[0]" :min="0" :step="1" placeholder="最小值" style="width: 100px;"></el-input-number>
+                                    <span style="margin: 0 8px;">至</span>
+                                    <el-input-number v-model="revenueFilter.profitRange[1]" :min="0" :step="1" placeholder="最大值" style="width: 100px;"></el-input-number>
+                                </el-form-item>
+                                
+                                <el-form-item>
+                                    <el-button type="primary" @click="queryRevenueData" icon="el-icon-search">查询</el-button>
+                                    <el-button @click="resetRevenueFilter" icon="el-icon-refresh">重置</el-button>
+                                    <el-button type="success" @click="exportRevenueData" icon="el-icon-download">高级导出</el-button>
+                                </el-form-item>
+                            </el-form>
+                        </el-card>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="success" icon="el-icon-download" @click="exportRevenueData">数据导出</el-button>
+                        </div>
+                        
+                        <!-- 营收数据表格 -->
+                        <div class="table-container">
+                        <el-table :data="filteredRevenueData.slice((currentPage-1)*pageSize, currentPage*pageSize)" border stripe highlight-current-row style="width: 100%">
+                            <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
+                            <el-table-column prop="unitName" label="运营单位名称" min-width="150" align="center" sortable></el-table-column>
+                            <el-table-column prop="industryType" label="产业类型" min-width="120" align="center" sortable></el-table-column>
+                            <el-table-column prop="businessFormat" label="业态" min-width="120" align="center" sortable></el-table-column>
+                            <el-table-column prop="revenue" :label="getRevenueColumnLabel(revenueActiveDimension)" min-width="120" align="center" sortable>
+                                <template slot-scope="scope">
+                                    <span style="color: #67C23A">{{ formatMoney(scope.row.revenue) }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="cost" :label="getCostColumnLabel(revenueActiveDimension)" min-width="120" align="center" sortable>
+                                <template slot-scope="scope">
+                                    <span style="color: #E6A23C">{{ formatMoney(scope.row.cost) }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="profit" :label="getProfitColumnLabel(revenueActiveDimension)" min-width="120" align="center" sortable>
+                                <template slot-scope="scope">
+                                    <span :style="{color: scope.row.profit >= 0 ? '#67C23A' : '#F56C6C'}">{{ formatMoney(scope.row.profit) }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="dataTime" label="时间" width="120"></el-table-column>
+                        </el-table>
+                        
+                        <!-- 分页 -->
+                        <div class="pagination-container">
+                            <el-pagination
+                                @size-change="handleSizeChange"
+                                @current-change="handleCurrentChange"
+                                :current-page="currentPage"
+                                :page-sizes="[10, 20, 50, 100]"
+                                :page-size="pageSize"
+                                layout="total, sizes, prev, pager, next, jumper"
+                                :total="total">
+                            </el-pagination>
+                        </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 车流/客流数据页面 -->
+                    <div v-if="activeMenu === 'flow'" class="page-container">
+                        <div class="page-header">
+                            <h3>车流/客流数据</h3>
+                        </div>
+                        
+                        <!-- 数据维度标签页 -->
+                        <el-tabs v-model="flowActiveDimension" @tab-click="handleFlowTabClick" style="margin-bottom: 20px;">
+                            <el-tab-pane label="日" name="day"></el-tab-pane>
+                            <el-tab-pane label="月" name="month"></el-tab-pane>
+                            <el-tab-pane label="年" name="year"></el-tab-pane>
+                        </el-tabs>
+                        
+                        <!-- 筛选区 -->
+                        <el-card class="filter-card">
+                            <div slot="header">
+                                <span>筛选条件</span>
+                            </div>
+                            <el-form :inline="true" :model="flowFilter" class="filter-form">
+                                <el-form-item label="筛选条件">
+                                    <el-cascader
+                                        v-model="flowFilter.cascaderValue"
+                                        :options="flowCascaderOptions"
+                                        :props="flowCascaderProps"
+                                        placeholder="请选择筛选条件"
+                                        style="width: 300px"
+                                        clearable
+                                        filterable>
+                                    </el-cascader>
+                                </el-form-item>
+                                
+                                <el-form-item label="日期范围" v-if="flowActiveDimension !== 'year'">
+                                    <el-date-picker
+                                        v-model="flowFilter.dateRange"
+                                        :type="getDatePickerType(flowActiveDimension)"
+                                        range-separator="至"
+                                        start-placeholder="开始日期"
+                                        end-placeholder="结束日期"
+                                        style="width: 300px">
+                                    </el-date-picker>
+                                </el-form-item>
+                                
+                                <!-- 年份范围选择器 -->
+                                <el-form-item label="年份范围" v-if="flowActiveDimension === 'year'">
+                                    <el-date-picker
+                                        v-model="flowFilter.startYear"
+                                        type="year"
+                                        placeholder="开始年份"
+                                        style="width: 140px; margin-right: 10px;">
+                                    </el-date-picker>
+                                    <span style="margin: 0 5px;">至</span>
+                                    <el-date-picker
+                                        v-model="flowFilter.endYear"
+                                        type="year"
+                                        placeholder="结束年份"
+                                        style="width: 140px;">
+                                    </el-date-picker>
+                                </el-form-item>
+                                
+                                <el-form-item>
+                                    <el-button type="primary" @click="queryFlowData">查询</el-button>
+                                    <el-button @click="resetFlowFilter">重置</el-button>
+                                </el-form-item>
+                            </el-form>
+                        </el-card>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="success" icon="el-icon-download" @click="exportFlowData">数据导出</el-button>
+                        </div>
+                        
+                        <!-- 数据表格 -->
+                        <div class="table-container">
+                        <el-table :data="flowData" border style="width: 100%">
+                            <el-table-column prop="id" label="序号" width="80"></el-table-column>
+                            <el-table-column prop="unitName" label="运营单位名称" min-width="150"></el-table-column>
+                            <el-table-column prop="industryType" label="产业类型" min-width="120"></el-table-column>
+                            <el-table-column prop="vehicleFlow" label="车流(辆)" min-width="120">
+                                <template slot-scope="scope">
+                                    <el-button type="text" @click="showFlowDetail(scope.row, 'vehicle')" style="color: #409EFF">
+                                        {{ scope.row.vehicleFlow }}
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="passengerFlow" label="客流(人)" min-width="120">
+                                <template slot-scope="scope">
+                                    <el-button type="text" @click="showFlowDetail(scope.row, 'passenger')" style="color: #409EFF">
+                                        {{ scope.row.passengerFlow }}
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="dataTime" label="时间" min-width="120"></el-table-column>
+                            <el-table-column label="操作" width="120" align="center">
+                                <template slot-scope="scope">
+                                    <el-button type="text" @click="showFlowDetailDialog(scope.row)" style="color: #409EFF">
+                                        查看
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        
+                        <!-- 分页 -->
+                        <div class="pagination-container">
+                            <el-pagination
+                                @size-change="handleSizeChange"
+                                @current-change="handleCurrentChange"
+                                :current-page="currentPage"
+                                :page-sizes="[10, 20, 50, 100]"
+                                :page-size="pageSize"
+                                layout="total, sizes, prev, pager, next, jumper"
+                                :total="total">
+                            </el-pagination>
+                        </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 产业类型管理页面 -->
+                    <div v-if="activeMenu === 'industry'" class="page-container">
+                        <div class="page-header">
+                            <h3>产业类型管理</h3>
+                        </div>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="primary" icon="el-icon-plus" @click="addIndustry">新增产业类型</el-button>
+                        </div>
+                        
+                        <!-- 数据表格 -->
+                        <el-table :data="industryData" border style="width: 100%">
+                            <el-table-column prop="id" label="产业ID" width="100"></el-table-column>
+                            <el-table-column prop="name" label="产业类型" width="150"></el-table-column>
+                            <el-table-column prop="shortName" label="简称" width="120"></el-table-column>
+                            <el-table-column prop="hasFlow" label="车流客流" width="120">
+                                <template slot-scope="scope">
+                                    <el-tag :type="scope.row.hasFlow ? 'success' : 'info'">
+                                        {{ scope.row.hasFlow ? '是' : '否' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="description" label="描述"></el-table-column>
+                            <el-table-column prop="remarks" label="备注" width="150"></el-table-column>
+                            <el-table-column label="操作" width="150">
+                                <template slot-scope="scope">
+                                    <el-button size="mini" @click="editIndustry(scope.row)">编辑</el-button>
+                                    <el-button size="mini" type="danger" @click="deleteIndustry(scope.row)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                    
+                    <!-- 业态管理页面 -->
+                    <div v-if="activeMenu === 'format'" class="page-container">
+                        <div class="page-header">
+                            <h3>业态管理</h3>
+                        </div>
+                        
+                        <!-- 筛选区 -->
+                        <el-card class="filter-card">
+                            <div slot="header">
+                                <span>筛选条件</span>
+                            </div>
+                            <el-form :inline="true" :model="formatFilter" class="filter-form">
+                                <el-form-item label="产业类型">
+                                    <el-select v-model="formatFilter.industryType" placeholder="请选择产业类型" style="width: 200px">
+                                        <el-option label="服务区+" value="服务区+"></el-option>
+                                        <el-option label="交旅融合" value="交旅融合"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                                
+                                <el-form-item label="业态搜索">
+                                    <el-input v-model="formatFilter.name" placeholder="请输入业态名称" style="width: 200px"></el-input>
+                                </el-form-item>
+                                
+                                <el-form-item>
+                                    <el-button type="primary" @click="queryFormatData">查询</el-button>
+                                    <el-button @click="resetFormatFilter">重置</el-button>
+                                </el-form-item>
+                            </el-form>
+                        </el-card>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="primary" icon="el-icon-plus" @click="addFormat">新增业态</el-button>
+                        </div>
+                        
+                        <!-- 数据表格 -->
+                        <el-table :data="formatData" border style="width: 100%">
+                            <el-table-column prop="id" label="业态ID" width="100"></el-table-column>
+                            <el-table-column prop="industryType" label="所属产业类型" width="150">
+                                <template slot-scope="scope">
+                                    <span>{{ scope.row.industryType || '无类型业态' }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="name" label="业态名称" width="150"></el-table-column>
+                            <el-table-column prop="remarks" label="备注"></el-table-column>
+                            <el-table-column label="操作" width="150">
+                                <template slot-scope="scope">
+                                    <el-button size="mini" @click="editFormat(scope.row)">编辑</el-button>
+                                    <el-button size="mini" type="danger" @click="deleteFormat(scope.row)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                    
+                    <!-- 运营单位管理页面 -->
+                    <div v-if="activeMenu === 'unit'" class="page-container" data-page="unit">
+                        <div class="page-header">
+                            <h3>运营单位管理</h3>
+                        </div>
+                        
+                        <!-- 筛选区 -->
+                        <el-card class="filter-card">
+                            <div slot="header">
+                                <span>筛选条件</span>
+                            </div>
+                            <el-form :inline="true" :model="unitFilter" class="filter-form">
+                                <el-form-item label="运营单位名称">
+                                    <el-input v-model="unitFilter.name" placeholder="请输入单位名称" style="width: 200px"></el-input>
+                                </el-form-item>
+                                
+                                <el-form-item label="产业类型">
+                                    <el-select v-model="unitFilter.industryType" placeholder="请选择产业类型" style="width: 200px">
+                                        <el-option label="服务区+" value="服务区+"></el-option>
+                                        <el-option label="交旅融合" value="交旅融合"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                                
+                                <el-form-item label="所属城市">
+                                    <el-select v-model="unitFilter.city" placeholder="请选择城市" style="width: 200px">
+                                        <el-option label="兰州" value="兰州"></el-option>
+                                        <el-option label="嘉峪关" value="嘉峪关"></el-option>
+                                        <el-option label="酒泉" value="酒泉"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                                
+                                <el-form-item>
+                                    <el-button type="primary" @click="queryUnitData">查询</el-button>
+                                    <el-button @click="resetUnitFilter">重置</el-button>
+                                </el-form-item>
+                            </el-form>
+                        </el-card>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="primary" icon="el-icon-plus" @click="addUnit">新增运营单位</el-button>
+                        </div>
+                        
+                        <!-- 数据表格 -->
+                        <div class="table-wrapper">
+                            <el-table :data="unitData" border style="width: 100%; min-width: 1500px;">
+                                <el-table-column prop="id" label="ID" width="100"></el-table-column>
+                                <el-table-column prop="name" label="运营单位名称" min-width="200"></el-table-column>
+                                <el-table-column prop="industryType" label="产业类型" width="150"></el-table-column>
+                                <el-table-column prop="formatType" label="业态" width="150">
+                                    <template slot-scope="scope">
+                                        <span>{{ scope.row.formatType || '-' }}</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="location" label="位置" width="120"></el-table-column>
+                                <el-table-column prop="buildStatus" label="建设状态" width="120">
+                                    <template slot-scope="scope">
+                                        <el-tag :type="getBuildStatusType(scope.row.buildStatus)">
+                                            {{ getBuildStatusText(scope.row.buildStatus) }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="displayStatus" label="显示状态" width="120">
+                                    <template slot-scope="scope">
+                                        <el-tag :type="scope.row.displayStatus ? 'success' : 'danger'">
+                                            {{ scope.row.displayStatus ? '显示' : '不显示' }}
+                                        </el-tag>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column prop="remarks" label="备注信息" width="150" show-overflow-tooltip>
+                                    <template slot-scope="scope">
+                                        <span>{{ scope.row.remarks || '-' }}</span>
+                                    </template>
+                                </el-table-column>
+                                <el-table-column label="操作" width="180">
+                                    <template slot-scope="scope">
+                                        <div class="table-actions">
+                                            <el-button size="mini" @click="editUnit(scope.row)">编辑</el-button>
+                                            <el-button size="mini" type="danger" @click="deleteUnit(scope.row)">删除</el-button>
+                                        </div>
+                                    </template>
+                                </el-table-column>
+                            </el-table>
+                        </div>
+                    </div>
+                    
+                    <!-- 用户管理页面 -->
+                    <div v-if="activeMenu === 'users'" class="page-container">
+                        <div class="page-header">
+                            <h3>用户管理</h3>
+                        </div>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="primary" icon="el-icon-plus" @click="addUser">新增用户</el-button>
+                        </div>
+                        
+                        <!-- 数据表格 -->
+                        <el-table :data="userData" border style="width: 100%">
+                            <el-table-column prop="id" label="用户ID" width="100"></el-table-column>
+                            <el-table-column prop="username" label="用户名" width="150"></el-table-column>
+                            <el-table-column prop="loginAccount" label="登录账号" width="150"></el-table-column>
+                            <el-table-column prop="roles" label="所属角色" width="200">
+                                <template slot-scope="scope">
+                                    <el-tag v-for="role in scope.row.roles" :key="role" size="mini" style="margin-right: 5px">
+                                        {{ role }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="status" label="状态" width="100">
+                                <template slot-scope="scope">
+                                    <el-tag :type="scope.row.status ? 'success' : 'danger'">
+                                        {{ scope.row.status ? '启用' : '禁用' }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="200">
+                                <template slot-scope="scope">
+                                    <el-button size="mini" @click="editUser(scope.row)">编辑</el-button>
+                                    <el-button size="mini" type="warning" @click="resetPassword(scope.row)">重置密码</el-button>
+                                    <el-button size="mini" type="danger" @click="deleteUser(scope.row)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                    
+                    <!-- 角色管理页面 -->
+                    <div v-if="activeMenu === 'roles'" class="page-container">
+                        <div class="page-header">
+                            <h3>角色管理</h3>
+                        </div>
+                        
+                        <!-- 操作区 -->
+                        <div class="action-bar">
+                            <el-button type="primary" icon="el-icon-plus" @click="addRole">新增角色</el-button>
+                        </div>
+                        
+                        <!-- 数据表格 -->
+                        <el-table :data="roleData" border style="width: 100%">
+                            <el-table-column prop="id" label="角色ID" width="100"></el-table-column>
+                            <el-table-column prop="name" label="角色名称" width="150"></el-table-column>
+                            <el-table-column prop="description" label="角色描述"></el-table-column>
+                            <el-table-column label="操作" width="200">
+                                <template slot-scope="scope">
+                                    <el-button size="mini" @click="editRole(scope.row)">编辑</el-button>
+                                    <el-button size="mini" type="primary" @click="setPermissions(scope.row)">权限设置</el-button>
+                                    <el-button size="mini" type="danger" @click="deleteRole(scope.row)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                    
+                    <!-- 系统日志页面 -->
+                    <div v-if="activeMenu === 'logs'" class="page-container">
+                        <div class="page-header">
+                            <h3>系统日志</h3>
+                        </div>
+                        
+                        <!-- 筛选区 -->
+                        <el-card class="filter-card">
+                            <div slot="header">
+                                <span>筛选条件</span>
+                            </div>
+                            <el-form :inline="true" :model="logFilter" class="filter-form">
+                                <el-form-item label="操作用户">
+                                    <el-input v-model="logFilter.user" placeholder="请输入用户名" style="width: 200px"></el-input>
+                                </el-form-item>
+                                
+                                <el-form-item label="操作模块">
+                                    <el-select v-model="logFilter.module" placeholder="请选择模块" style="width: 200px">
+                                        <el-option label="营收数据" value="营收数据"></el-option>
+                                        <el-option label="产业类型管理" value="产业类型管理"></el-option>
+                                        <el-option label="业态管理" value="业态管理"></el-option>
+                                        <el-option label="运营单位管理" value="运营单位管理"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                                
+                                <el-form-item label="操作类型">
+                                    <el-select v-model="logFilter.type" placeholder="请选择类型" style="width: 200px">
+                                        <el-option label="新增" value="新增"></el-option>
+                                        <el-option label="修改" value="修改"></el-option>
+                                        <el-option label="删除" value="删除"></el-option>
+                                        <el-option label="登录" value="登录"></el-option>
+                                        <el-option label="导出" value="导出"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                                
+                                <el-form-item label="日期范围">
+                                    <el-date-picker
+                                        v-model="logFilter.dateRange"
+                                        type="datetimerange"
+                                        range-separator="至"
+                                        start-placeholder="开始日期"
+                                        end-placeholder="结束日期"
+                                        style="width: 350px">
+                                    </el-date-picker>
+                                </el-form-item>
+                                
+                                <el-form-item>
+                                    <el-button type="primary" @click="queryLogData" :loading="logFormLoading">查询</el-button>
+                                    <el-button @click="resetLogFilter">重置</el-button>
+                                    <el-button type="success" @click="exportLogData" icon="el-icon-download">导出日志</el-button>
+                                </el-form-item>
+                            </el-form>
+                        </el-card>
+                        
+                        <!-- 数据表格 -->
+                        <el-table :data="logData" border style="width: 100%">
+                            <el-table-column prop="id" label="日志ID" width="100"></el-table-column>
+                            <el-table-column prop="user" label="操作用户" width="120"></el-table-column>
+                            <el-table-column prop="ip" label="IP地址" width="130"></el-table-column>
+                            <el-table-column prop="time" label="操作时间" width="160"></el-table-column>
+                            <el-table-column prop="module" label="操作模块" width="120"></el-table-column>
+                            <el-table-column prop="type" label="操作类型" width="100">
+                                <template slot-scope="scope">
+                                    <el-tag :type="getLogTypeColor(scope.row.type)" size="mini">
+                                        {{ scope.row.type }}
+                                    </el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="detail" label="操作详情" show-overflow-tooltip></el-table-column>
+                            <el-table-column label="操作" width="120" align="center">
+                                <template slot-scope="scope">
+                                    <el-button size="mini" type="primary" @click="viewLogDetail(scope.row)">查看详情</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                        
+                        <!-- 分页 -->
+                        <div class="pagination-container">
+                            <el-pagination
+                                @size-change="handleSizeChange"
+                                @current-change="handleCurrentChange"
+                                :current-page="currentPage"
+                                :page-sizes="[10, 20, 50, 100]"
+                                :page-size="pageSize"
+                                layout="total, sizes, prev, pager, next, jumper"
+                                :total="total">
+                            </el-pagination>
+                        </div>
+                    </div>
+                    
+                    <!-- 默认首页 -->
+                    <div v-if="!activeMenu || activeMenu === 'dashboard'" class="page-container">
+                        <div class="dashboard">
+                            <h2>欢迎使用路衍经济统计分析系统管理后台</h2>
+                            <div class="dashboard-cards">
+                                <el-row :gutter="20">
+                                    <el-col :span="6">
+                                        <div class="dashboard-module revenue" @click="navigateToModule('revenue')">
+                                            <h3>营收数据管理</h3>
+                                        </div>
+                                    </el-col>
+                                    <el-col :span="6">
+                                        <div class="dashboard-module flow" @click="navigateToModule('flow')">
+                                            <h3>车流客流数据管理</h3>
+                                        </div>
+                                    </el-col>
+                                    <el-col :span="6">
+                                        <div class="dashboard-module management" @click="navigateToModule('users')">
+                                            <h3>用户管理</h3>
+                                        </div>
+                                    </el-col>
+                                    <el-col :span="6">
+                                        <div class="dashboard-module system" @click="navigateToModule('logs')">
+                                            <h3>系统日志</h3>
+                                        </div>
+                                    </el-col>
+                                </el-row>
+                            </div>
+                            
+                            <!-- 系统监控图表区域 -->
+                            <div class="dashboard-charts" style="margin-top: 30px;">
+                                <el-row :gutter="20">
+                                    <!-- 数据量统计图 -->
+                                    <el-col :span="12">
+                                        <el-card class="chart-card">
+                                            <div slot="header">
+                                                <span>数据量统计</span>
+                                            </div>
+                                            <div id="dataVolumeChart" style="width: 100%; height: 300px;"></div>
+                                        </el-card>
+                                    </el-col>
+                                    
+                                    <!-- 服务器状态监控 -->
+                                    <el-col :span="12">
+                                        <el-card class="chart-card">
+                                            <div slot="header">
+                                                <span>服务器状态监控</span>
+                                            </div>
+                                            <div id="serverStatusChart" style="width: 100%; height: 300px;"></div>
+                                        </el-card>
+                                    </el-col>
+                                </el-row>
+                                
+
+                            </div>
+                        </div>
+                    </div>
+                </el-main>
+            </el-container>
+        </el-container>
+        
+        <!-- 车流/客流详情弹窗 -->
+        <el-dialog :title="flowDetailTitle" :visible.sync="flowDetailVisible" width="900px" :before-close="handleFlowDetailClose">
+            <!-- 基本信息概览 -->
+            <div class="flow-detail-summary" style="margin-bottom: 20px;">
+                <el-row :gutter="20">
+                    <el-col :span="8">
+                        <el-card class="summary-card">
+                            <div class="summary-item">
+                                <div class="summary-label">总车流量</div>
+                                <div class="summary-value" style="color: #409EFF;">{{ currentFlowDetail.vehicleFlow || 0 }} 辆</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-card class="summary-card">
+                            <div class="summary-item">
+                                <div class="summary-label">总客流量</div>
+                                <div class="summary-value" style="color: #67C23A;">{{ currentFlowDetail.passengerFlow || 0 }} 人</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                    <el-col :span="8">
+                        <el-card class="summary-card">
+                            <div class="summary-item">
+                                <div class="summary-label">来源地数量</div>
+                                <div class="summary-value" style="color: #E6A23C;">{{ (currentFlowDetail.flowDetails || []).length }} 个</div>
+                            </div>
+                        </el-card>
+                    </el-col>
+                </el-row>
+            </div>
+            
+            <el-tabs v-model="activeFlowTab" @tab-click="handleFlowDetailTabClick">
+                <el-tab-pane label="数据详情" name="details">
+                    <div class="flow-detail-content">
+                        <!-- 筛选和排序 -->
+                        <div class="detail-filter" style="margin-bottom: 15px;">
+                            <el-row :gutter="10">
+                                <el-col :span="8">
+                                    <el-input v-model="flowDetailFilter.origin" placeholder="搜索来源地" prefix-icon="el-icon-search" clearable></el-input>
+                                </el-col>
+                                <el-col :span="6">
+                                    <el-select v-model="flowDetailFilter.sortBy" placeholder="排序方式">
+                                        <el-option label="按车流量排序" value="vehicle"></el-option>
+                                        <el-option label="按客流量排序" value="passenger"></el-option>
+                                        <el-option label="按来源地排序" value="origin"></el-option>
+                                    </el-select>
+                                </el-col>
+                                <el-col :span="4">
+                                    <el-select v-model="flowDetailFilter.sortOrder" placeholder="排序">
+                                        <el-option label="降序" value="desc"></el-option>
+                                        <el-option label="升序" value="asc"></el-option>
+                                    </el-select>
+                                </el-col>
+                                <el-col :span="6">
+                                    <el-button type="primary" @click="applyFlowDetailFilter" size="small">筛选</el-button>
+                                    <el-button @click="resetFlowDetailFilter" size="small">重置</el-button>
+                                </el-col>
+                            </el-row>
+                        </div>
+                        
+                        <!-- 详情表格 -->
+                        <el-table :data="filteredFlowDetails" border stripe max-height="400">
+                            <el-table-column type="index" label="序号" width="60" align="center"></el-table-column>
+                            <el-table-column prop="origin" label="来源地" width="120" align="center" sortable></el-table-column>
+                            <el-table-column prop="vehicleCount" label="车流量" width="100" align="center" sortable>
+                                <template slot-scope="scope">
+                                    <el-tag type="info" size="mini">{{ scope.row.vehicleCount }} 辆</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="passengerCount" label="客流量" width="100" align="center" sortable>
+                                <template slot-scope="scope">
+                                    <el-tag type="success" size="mini">{{ scope.row.passengerCount }} 人</el-tag>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="车流占比" width="120" align="center">
+                                <template slot-scope="scope">
+                                    <el-progress :percentage="getVehiclePercentage(scope.row.vehicleCount)" :stroke-width="8" :show-text="false"></el-progress>
+                                    <span style="font-size: 12px; color: #666;">{{ getVehiclePercentage(scope.row.vehicleCount) }}%</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="客流占比" width="120" align="center">
+                                <template slot-scope="scope">
+                                    <el-progress :percentage="getPassengerPercentage(scope.row.passengerCount)" :stroke-width="8" :show-text="false" color="#67C23A"></el-progress>
+                                    <span style="font-size: 12px; color: #666;">{{ getPassengerPercentage(scope.row.passengerCount) }}%</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="100" align="center">
+                                <template slot-scope="scope">
+                                    <el-button type="text" size="mini" @click="viewOriginDetail(scope.row)">详情</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+                </el-tab-pane>
+                
+                <el-tab-pane label="图表分析" name="chart">
+                    <div class="flow-chart-container">
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <div class="chart-wrapper">
+                                    <h4>车流来源分布</h4>
+                                    <div id="vehicleFlowChart" style="width: 100%; height: 300px;"></div>
+                                </div>
+                            </el-col>
+                            <el-col :span="12">
+                                <div class="chart-wrapper">
+                                    <h4>客流来源分布</h4>
+                                    <div id="passengerFlowChart" style="width: 100%; height: 300px;"></div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                        <el-row style="margin-top: 20px;">
+                            <el-col :span="24">
+                                <div class="chart-wrapper">
+                                    <h4>车流客流对比分析</h4>
+                                    <div id="flowComparisonChart" style="width: 100%; height: 300px;"></div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+                </el-tab-pane>
+                
+                <el-tab-pane label="数据导出" name="export">
+                    <div class="export-options">
+                        <el-card>
+                            <div slot="header">
+                                <span>导出选项</span>
+                            </div>
+                            <el-form :inline="true">
+                                <el-form-item label="导出格式">
+                                    <el-radio-group v-model="exportOptions.format">
+                                        <el-radio label="excel">Excel</el-radio>
+                                        <el-radio label="csv">CSV</el-radio>
+                                        <el-radio label="pdf">PDF</el-radio>
+                                    </el-radio-group>
+                                </el-form-item>
+                                <el-form-item label="导出内容">
+                                    <el-checkbox-group v-model="exportOptions.content">
+                                        <el-checkbox label="summary">概览信息</el-checkbox>
+                                        <el-checkbox label="details">详细数据</el-checkbox>
+                                        <el-checkbox label="charts">图表分析</el-checkbox>
+                                    </el-checkbox-group>
+                                </el-form-item>
+                                <el-form-item>
+                                    <el-button type="primary" @click="exportFlowData" icon="el-icon-download">导出数据</el-button>
+                                </el-form-item>
+                            </el-form>
+                        </el-card>
+                    </div>
+                </el-tab-pane>
+            </el-tabs>
+        </el-dialog>
+        
+        <!-- 产业类型新增/编辑弹窗 -->
+        <el-dialog :title="industryDialogTitle" :visible.sync="industryDialogVisible" width="600px" :close-on-click-modal="false">
+            <el-form :model="industryForm" :rules="industryRules" ref="industryForm" label-width="120px">
+                <el-form-item label="产业类型" prop="name">
+                    <el-input v-model="industryForm.name" placeholder="请输入产业类型名称" maxlength="20" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="简称" prop="shortName">
+                    <el-input v-model="industryForm.shortName" placeholder="请输入简称" maxlength="10" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="车流客流" prop="hasFlow">
+                    <el-radio-group v-model="industryForm.hasFlow">
+                        <el-radio :label="true">是</el-radio>
+                        <el-radio :label="false">否</el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                <el-form-item label="描述" prop="description">
+                    <el-input type="textarea" v-model="industryForm.description" placeholder="请输入产业描述" :rows="3" maxlength="200" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="备注" prop="remarks">
+                    <el-input type="textarea" v-model="industryForm.remarks" placeholder="请输入备注" :rows="2" maxlength="100" show-word-limit></el-input>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="cancelIndustryDialog">取消</el-button>
+                <el-button type="primary" @click="saveIndustry" :loading="industryFormLoading">确定</el-button>
+            </div>
+        </el-dialog>
+        
+        <!-- 业态新增/编辑弹窗 -->
+        <el-dialog :title="formatDialogTitle" :visible.sync="formatDialogVisible" width="600px" :close-on-click-modal="false">
+            <el-form :model="formatForm" :rules="formatRules" ref="formatForm" label-width="120px">
+                <el-form-item label="业态名称" prop="name">
+                    <el-input v-model="formatForm.name" placeholder="请输入业态名称" maxlength="30" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="所属产业类型" prop="industryType">
+                    <el-select v-model="formatForm.industryType" placeholder="请选择产业类型" style="width: 100%;">
+                        <el-option v-for="industry in industryData" :key="industry.id" :label="industry.name" :value="industry.name"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="排序" prop="sort">
+                    <el-input-number v-model="formatForm.sort" :min="0" :max="999" placeholder="排序值"></el-input-number>
+                </el-form-item>
+                <el-form-item label="状态" prop="status">
+                    <el-radio-group v-model="formatForm.status">
+                        <el-radio :label="true">启用</el-radio>
+                        <el-radio :label="false">禁用</el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                <el-form-item label="描述" prop="description">
+                    <el-input type="textarea" v-model="formatForm.description" placeholder="请输入业态描述" :rows="3" maxlength="200" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="备注" prop="remarks">
+                    <el-input type="textarea" v-model="formatForm.remarks" placeholder="请输入备注" :rows="2" maxlength="100" show-word-limit></el-input>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="cancelFormatDialog">取消</el-button>
+                <el-button type="primary" @click="saveFormat" :loading="formatFormLoading">确定</el-button>
+            </div>
+        </el-dialog>
+        
+        <!-- 运营单位新增/编辑弹窗 -->
+        <el-dialog :title="unitDialogTitle" :visible.sync="unitDialogVisible" width="800px" :close-on-click-modal="false">
+            <el-form :model="unitForm" :rules="unitRules" ref="unitForm" label-width="120px">
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="运营单位名称" prop="name">
+                            <el-input v-model="unitForm.name" placeholder="请输入单位名称" maxlength="30" show-word-limit></el-input>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="产业类型" prop="industryType">
+                            <el-select v-model="unitForm.industryType" placeholder="请选择产业类型" style="width: 100%;">
+                                <el-option label="服务区+" value="服务区+"></el-option>
+                                <el-option label="交旅融合" value="交旅融合"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="业态" prop="formatType">
+                            <el-select v-model="unitForm.formatType" placeholder="请选择业态" style="width: 100%;" :disabled="!unitForm.industryType">
+                                <el-option v-for="format in filteredFormatData" :key="format.id" :label="format.name" :value="format.name"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="位置" prop="location">
+                            <el-select v-model="unitForm.location" placeholder="请选择所在城市" style="width: 100%;">
+                                <el-option label="兰州" value="兰州"></el-option>
+                                <el-option label="嘉峪关" value="嘉峪关"></el-option>
+                                <el-option label="金昌" value="金昌"></el-option>
+                                <el-option label="白银" value="白银"></el-option>
+                                <el-option label="天水" value="天水"></el-option>
+                                <el-option label="武威" value="武威"></el-option>
+                                <el-option label="张掖" value="张掖"></el-option>
+                                <el-option label="平凉" value="平凉"></el-option>
+                                <el-option label="酒泉" value="酒泉"></el-option>
+                                <el-option label="庆阳" value="庆阳"></el-option>
+                                <el-option label="定西" value="定西"></el-option>
+                                <el-option label="陇南" value="陇南"></el-option>
+                                <el-option label="临夏" value="临夏"></el-option>
+                                <el-option label="甘南" value="甘南"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="建设状态" prop="buildStatus">
+                            <el-select v-model="unitForm.buildStatus" placeholder="请选择建设状态" style="width: 100%;">
+                                <el-option label="规划中" :value="1"></el-option>
+                                <el-option label="建设中" :value="2"></el-option>
+                                <el-option label="运营中" :value="3"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="经度" prop="longitude">
+                            <el-input v-model.number="unitForm.longitude" placeholder="请输入经度" type="number" step="0.000001"></el-input>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="纬度" prop="latitude">
+                            <el-input v-model.number="unitForm.latitude" placeholder="请输入纬度" type="number" step="0.000001"></el-input>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                
+                <el-form-item label="显示状态" prop="displayStatus">
+                    <el-radio-group v-model="unitForm.displayStatus">
+                        <el-radio :label="true">显示</el-radio>
+                        <el-radio :label="false">不显示</el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                
+                <el-form-item label="项目概况" prop="projectOverview">
+                    <div class="rich-text-container">
+                        <div id="projectOverviewEditor" class="rich-text-editor" 
+                             @input="updateRichTextContent('projectOverview', $event.target)"
+                             v-html="unitForm.projectOverview"
+                             placeholder="请输入项目概况，支持图文混排">
+                        </div>
+
+                    </div>
+                </el-form-item>
+                
+                <el-form-item label="项目简介" prop="projectIntro">
+                    <div class="rich-text-container">
+                        <div id="projectIntroEditor" class="rich-text-editor" 
+                             @input="updateRichTextContent('projectIntro', $event.target)"
+                             v-html="unitForm.projectIntro"
+                             placeholder="请输入项目简介，详细介绍项目背景、投资信息、规模等">
+                        </div>
+
+                    </div>
+                </el-form-item>
+                
+                <el-form-item label="备注" prop="remarks">
+                    <el-input type="textarea" v-model="unitForm.remarks" placeholder="请输入备注" :rows="2" maxlength="200" show-word-limit></el-input>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="cancelUnitDialog">取消</el-button>
+                <el-button type="primary" @click="saveUnit" :loading="unitFormLoading">确定</el-button>
+            </div>
+        </el-dialog>
+        
+        <!-- 用户新增/编辑弹窗 -->
+        <el-dialog :title="userDialogTitle" :visible.sync="userDialogVisible" width="600px" :close-on-click-modal="false">
+            <el-form :model="userForm" :rules="userRules" ref="userForm" label-width="120px">
+                <el-form-item label="用户名" prop="username">
+                    <el-input v-model="userForm.username" placeholder="请输入用户名" maxlength="20" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="登录账号" prop="loginAccount">
+                    <el-input v-model="userForm.loginAccount" placeholder="请输入登录账号" maxlength="20" show-word-limit :disabled="userForm.id"></el-input>
+                </el-form-item>
+                <el-form-item label="密码" prop="password" v-if="!userForm.id">
+                    <el-input type="password" v-model="userForm.password" placeholder="请输入密码" maxlength="20" show-password></el-input>
+                </el-form-item>
+                <el-form-item label="确认密码" prop="confirmPassword" v-if="!userForm.id">
+                    <el-input type="password" v-model="userForm.confirmPassword" placeholder="请再次输入密码" maxlength="20" show-password></el-input>
+                </el-form-item>
+                <el-form-item label="所属角色" prop="roles">
+                    <el-select v-model="userForm.roles" multiple placeholder="请选择角色" style="width: 100%;">
+                        <el-option v-for="role in roleData" :key="role.id" :label="role.name" :value="role.name"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="状态" prop="status">
+                    <el-radio-group v-model="userForm.status">
+                        <el-radio :label="true">启用</el-radio>
+                        <el-radio :label="false">禁用</el-radio>
+                    </el-radio-group>
+                </el-form-item>
+                <el-form-item label="备注" prop="remarks">
+                    <el-input type="textarea" v-model="userForm.remarks" placeholder="请输入备注" :rows="2" maxlength="100" show-word-limit></el-input>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="cancelUserDialog">取消</el-button>
+                <el-button type="primary" @click="saveUser" :loading="userFormLoading">确定</el-button>
+            </div>
+        </el-dialog>
+        
+        <!-- 角色新增/编辑弹窗 -->
+        <el-dialog :title="roleDialogTitle" :visible.sync="roleDialogVisible" width="600px" :close-on-click-modal="false">
+            <el-form :model="roleForm" :rules="roleRules" ref="roleForm" label-width="120px">
+                <el-form-item label="角色名称" prop="name">
+                    <el-input v-model="roleForm.name" placeholder="请输入角色名称" maxlength="20" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="角色描述" prop="description">
+                    <el-input type="textarea" v-model="roleForm.description" placeholder="请输入角色描述" :rows="3" maxlength="200" show-word-limit></el-input>
+                </el-form-item>
+                <el-form-item label="备注" prop="remarks">
+                    <el-input type="textarea" v-model="roleForm.remarks" placeholder="请输入备注" :rows="2" maxlength="100" show-word-limit></el-input>
+                </el-form-item>
+            </el-form>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="cancelRoleDialog">取消</el-button>
+                <el-button type="primary" @click="saveRole" :loading="roleFormLoading">确定</el-button>
+            </div>
+        </el-dialog>
+        
+        <!-- 权限设置弹窗 -->
+        <el-dialog title="权限设置" :visible.sync="permissionDialogVisible" width="800px" :close-on-click-modal="false">
+            <div class="permission-container">
+                <h4>为角色 "{{ currentRole.name }}" 设置权限</h4>
+                <el-tree
+                    :data="permissionTree"
+                    :props="treeProps"
+                    show-checkbox
+                    node-key="id"
+                    ref="permissionTree"
+                    :default-checked-keys="currentPermissions"
+                    :default-expand-all="true">
+                </el-tree>
+            </div>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="permissionDialogVisible = false">取消</el-button>
+                <el-button type="primary" @click="savePermissions" :loading="permissionFormLoading">确定</el-button>
+            </div>
+        </el-dialog>
+        
+        <!-- 日志详情弹窗 -->
+        <el-dialog title="日志详情" :visible.sync="logDetailVisible" width="700px" :close-on-click-modal="false">
+            <div class="log-detail-container">
+                <el-descriptions :column="2" border>
+                    <el-descriptions-item label="日志ID">
+                        <el-tag type="info">{{ currentLogDetail.id }}</el-tag>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="操作用户">
+                        <el-tag type="primary">{{ currentLogDetail.user }}</el-tag>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="IP地址">
+                        <span>{{ currentLogDetail.ip }}</span>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="操作时间">
+                        <span>{{ currentLogDetail.time }}</span>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="操作模块">
+                        <el-tag type="warning">{{ currentLogDetail.module }}</el-tag>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="操作类型">
+                        <el-tag :type="getLogTypeColor(currentLogDetail.type)">{{ currentLogDetail.type }}</el-tag>
+                    </el-descriptions-item>
+                    <el-descriptions-item label="操作详情" :span="2">
+                        <div class="log-detail-content">
+                            {{ currentLogDetail.detail }}
+                        </div>
+                    </el-descriptions-item>
+                </el-descriptions>
+                
+                <!-- 相关信息 -->
+                <div class="log-additional-info" style="margin-top: 20px;">
+                    <h4>相关信息</h4>
+                    <el-row :gutter="20">
+                        <el-col :span="12">
+                            <el-card class="info-card">
+                                <div slot="header">
+                                    <span>用户信息</span>
+                                </div>
+                                <p><strong>用户名：</strong>{{ currentLogDetail.user }}</p>
+                                <p><strong>登录IP：</strong>{{ currentLogDetail.ip }}</p>
+                                <p><strong>操作时间：</strong>{{ currentLogDetail.time }}</p>
+                            </el-card>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-card class="info-card">
+                                <div slot="header">
+                                    <span>操作信息</span>
+                                </div>
+                                <p><strong>操作模块：</strong>{{ currentLogDetail.module }}</p>
+                                <p><strong>操作类型：</strong>{{ currentLogDetail.type }}</p>
+                                <p><strong>风险级别：</strong>
+                                    <el-tag v-if="currentLogDetail.type === '删除'" type="danger" size="mini">高风险</el-tag>
+                                    <el-tag v-else-if="currentLogDetail.type === '修改'" type="warning" size="mini">中风险</el-tag>
+                                    <el-tag v-else type="success" size="mini">低风险</el-tag>
+                                </p>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+                </div>
+            </div>
+            <div slot="footer" class="dialog-footer">
+                <el-button @click="logDetailVisible = false">关闭</el-button>
+            </div>
+        </el-dialog>
+    </div>
+</body>
+</html>
